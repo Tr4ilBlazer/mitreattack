@@ -1,0 +1,45 @@
+
+{% extends "base.html" %}
+
+{% block title %}Upload File for Threat Analysis{% endblock %}
+
+{% block content %}
+<h2>Upload File for Threat Analysis</h2>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<form id="uploadForm" method="post" enctype="multipart/form-data">
+  <div class="form-group">
+    <label for="file" class="form-label">Select a file to upload (txt, pdf, docx, or json):</label>
+    <input type="file" name="file" id="file" class="form-control" accept=".txt,.pdf,.docx,.json" required>
+  </div>
+  <button type="submit" class="btn btn-primary" id="analyzeBtn">Upload and Analyze</button>
+</form>
+
+<div id="loadingIndicator" style="display: none; text-align: center; margin-top: 20px;">
+  <div class="spinner-border text-primary" role="status">
+    <span class="visually-hidden">Loading...</span>
+  </div>
+  <p>Analyzing CTI report... Please wait.</p>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('uploadForm');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const loadingIndicator = document.getElementById('loadingIndicator');
+
+  form.addEventListener('submit', function(e) {
+    // Show loading indicator
+    loadingIndicator.style.display = 'block';
+    analyzeBtn.disabled = true;
+  });
+});
+</script>
+{% endblock %}

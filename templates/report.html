@@ -1,0 +1,482 @@
+{% extends "base.html" %}
+
+{% block title %}Report for {{ filename }}{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap" rel="stylesheet">
+    <style>
+        /* Styles from newer version */
+        .prediction-card {
+            display: flex;
+            justify-content: space-between;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1rem;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .prediction-text {
+            background-color: rgb(224, 242, 254);
+            padding: 1rem;
+            margin: 0;
+            transition: max-height 0.3s ease;
+            flex-grow: 1;
+            position: relative;
+        }
+
+        .mapping-section {
+            display: none;
+            padding: 1rem;
+            background-color: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-left: 1rem;
+            width: 400px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .table-header {
+            display: flex;
+            background-color: #e8f4f8;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            justify-content: space-between;
+        }
+
+        .table-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            background-color: white;
+            border-radius: 0.375rem;
+            border: 1px solid #e0e0e0;
+        }
+
+        .confidence-percentage {
+            text-align: right;
+            font-size: 1rem;
+            color: black;
+            margin-left: auto;
+            padding-right: 0.5rem;
+        }
+
+        .status-buttons {
+            margin-top: 0.5rem;
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+        }
+
+        .btn-accept,
+        .btn-review {
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            border: none;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .btn-accepted {
+            background-color: rgb(22, 163, 74);
+            color: white;
+        }
+
+        .btn-reviewing {
+            background-color: rgb(254, 249, 195);
+            color: rgb(161, 98, 7);
+            border: 1px solid rgb(253, 224, 71);
+        }
+
+        .btn-reviewed {
+            background-color: rgb(161, 98, 7);
+            color: white;
+        }
+
+        .edit-btn {
+            background-color: rgb(22, 163, 74);
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            white-space: nowrap;
+            height: auto;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 40%;
+            border-radius: 8px;
+        }
+
+        /* Styles from older version */
+        @media print {
+            .chart-container { page-break-inside: avoid; }
+            .prediction-card { page-break-inside: avoid; }
+            #save-pdf { display: none; }
+        }
+
+        .chart-container {
+            height: 400px;
+            margin-bottom: 2rem;
+        }
+
+        .analysis-summary {
+            background-color: white;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .description-text {
+            font-family: 'Roboto Mono', monospace;
+            white-space: pre-wrap;
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+        }
+
+        .mitigation-list {
+            list-style-type: disc;
+            padding-left: 1.5rem;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div id="report-content">
+    <h1 class="text-3xl font-bold mb-6">Report for {{ filename }}</h1>
+
+    <!-- Predictions Section (from newer version) -->
+    <div class="predictions-section mb-8">
+        <h2 class="text-2xl font-bold mb-4">Predictions</h2>
+        {% for prediction in analysis.predictions %}
+        <div class="prediction-card" onclick="toggleDetails({{ loop.index }})">
+            <p id="prediction-text-{{ loop.index }}" class="prediction-text">
+                {{ prediction.text }}
+            </p>
+            <div id="mapping-{{ loop.index }}" class="mapping-section">
+                <h2 class="font-bold">Mappings</h2>
+                <div class="table-header">
+                    <div style="flex: 1;">Technique</div>
+                    <button onclick="showModal({{ loop.index }}); event.stopPropagation();" class="edit-btn">
+                        Edit
+                    </button>
+                    <div style="flex: 1;">Confidence</div>
+                </div>
+                <div class="table-row">
+                    <div style="flex: 1;" id="technique-tactic-{{ loop.index }}">{{ prediction.technique }} - {{ prediction.tactic }}</div>
+                    <div class="confidence-percentage">
+                        {% set summed_confidence = (prediction.technique_confidence + prediction.tactic_confidence) /2 %}
+                        {{ "%.1f"|format(summed_confidence) }}%
+                    </div>
+                </div>
+                <div class="status-buttons">
+                    <button class="btn-accept" onclick="toggleAccept(this)">Accept</button>
+                    <button class="btn-review btn-reviewing" onclick="toggleReview(this)">Review</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for editing technique-tactic content -->
+        <div id="edit-modal-{{ loop.index }}" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">Edit Technique - Tactic</div>
+                <label for="technique-input-{{ loop.index }}">Technique - Tactic:</label>
+                <input type="text" id="technique-input-{{ loop.index }}" value="{{ prediction.technique }} - {{ prediction.tactic }}" style="width: 100%; padding: 0.5rem; margin-top: 0.5rem;">
+                <div class="modal-footer">
+                    <button class="btn-close" onclick="closeModal({{ loop.index }})">Close</button>
+                    <button class="btn-confirm" onclick="saveTechnique({{ loop.index }})">Okay</button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Analysis Summary (from old version) -->
+    <div class="card analysis-summary">
+        <h3>Analysis Summary</h3>
+        <p><strong>Most Common Tactic:</strong> <span class="prediction-tactic">{{ analysis.most_common_tactic }}</span> (Confidence: {{ analysis.tactic_confidences[analysis.most_common_tactic]|round(2) }}%)</p>
+        <p><strong>Most Common Technique:</strong> <span class="prediction-technique">{{ analysis.most_common_technique }}</span> (Confidence: {{ analysis.technique_confidences[analysis.most_common_technique]|round(2) }}%)</p>
+    </div>
+
+    <!-- Distribution Charts -->
+    <div class="row">
+        <div class="col-md-6">
+            <h3>Tactic Distribution</h3>
+            <div class="chart-container">
+                <canvas id="tacticChart"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <h3>Technique Distribution</h3>
+            <div class="chart-container">
+                <canvas id="techniqueChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- MITRE ATT&CK Information -->
+    <h3>MITRE ATT&CK Information</h3>
+    {% for item, data in enriched_analysis.items() %}
+    <div class="card mitre_prediction-card">
+        <h4>{{ data.info.name }} ({{ item }})</h4>
+        <p><strong>Type:</strong> {{ "Tactic" if 'mitigation' not in data.info else "Technique" }}</p>
+        <p><strong>Description:</strong></p>
+        <pre class="description-text">{{ data.info.description }}</pre>
+        <p><strong>Count:</strong> {{ data.count }}</p>
+        <p><strong>Confidence:</strong> {{ analysis.tactic_confidences[item]|round(2) if 'mitigation' not in data.info else analysis.technique_confidences[item]|round(2) }}%</p>
+        {% if 'mitigation' in data.info and data.info.mitigation %}
+        <p><strong>Mitigation:</strong></p>
+        <ul class="mitigation-list">
+            {% for mitigation in data.info.mitigation %}
+            <li class="mitigation-item">{{ mitigation }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+<button id="save-pdf" class="btn">Save as PDF</button>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // Data for charts
+    var tacticDistribution = {{ tactic_distribution|safe }};
+    var techniqueDistribution = {{ technique_distribution|safe }};
+    var tacticConfidences = {{ analysis.tactic_confidences|tojson }};
+    var techniqueConfidences = {{ analysis.technique_confidences|tojson }};
+
+    // Function to toggle the details section of each prediction
+    function toggleDetails(id) {
+        const details = document.getElementById('mapping-' + id);
+        const predictionText = document.getElementById('prediction-text-' + id);
+        if (details.style.display === 'none') {
+            details.style.display = 'block';
+            predictionText.style.maxHeight = '150px';
+        } else {
+            details.style.display = 'none';
+            predictionText.style.maxHeight = 'none';
+        }
+    }
+
+    function toggleAccept(button) {
+        if (button.textContent === "Accept") {
+            button.textContent = "Accepted";
+            button.classList.add('btn-accepted');
+        }
+    }
+
+    function toggleReview(button) {
+        if (button.textContent === "Review") {
+            button.textContent = "Reviewed";
+            button.classList.remove('btn-reviewing');
+            button.classList.add('btn-reviewed');
+        }
+    }
+
+    // Function to show the modal for editing technique-tactic content
+    function showModal(id) {
+        const modal = document.getElementById('edit-modal-' + id);
+        if (modal) {
+            modal.style.display = 'block';
+        }
+    }
+
+    // Function to close the modal
+    function closeModal(id) {
+        const modal = document.getElementById('edit-modal-' + id);
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    // Function to save the edited technique-tactic content
+    function saveTechnique(id) {
+        const input = document.getElementById('technique-input-' + id);
+        const displayElement = document.getElementById('technique-tactic-' + id);
+        if (input && displayElement) {
+            displayElement.textContent = input.value;
+        }
+        closeModal(id);
+    }
+
+    // Function to generate the tactic distribution chart
+    function createTacticChart() {
+        const tacticCtx = document.getElementById('tacticChart').getContext('2d');
+        new Chart(tacticCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(tacticDistribution),
+                datasets: [{
+                    label: 'Tactic Distribution',
+                    data: Object.values(tacticDistribution),
+                    backgroundColor: 'rgba(231, 76, 60, 0.7)',
+                    borderColor: 'rgba(231, 76, 60, 1)',
+                    borderWidth: 1
+                }, {
+                    label: 'Confidence',
+                    data: Object.keys(tacticDistribution).map(tactic => tacticConfidences[tactic]),
+                    type: 'line',
+                    fill: false,
+                    borderColor: 'rgba(52, 152, 219, 1)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    // Function to generate the technique distribution chart
+    function createTechniqueChart() {
+        const techniqueCtx = document.getElementById('techniqueChart').getContext('2d');
+        new Chart(techniqueCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(techniqueDistribution),
+                datasets: [{
+                    label: 'Technique Distribution',
+                    data: Object.values(techniqueDistribution),
+                    backgroundColor: 'rgba(41, 128, 185, 0.7)',
+                    borderColor: 'rgba(41, 128, 185, 1)',
+                    borderWidth: 1
+                }, {
+                    label: 'Confidence',
+                    data: Object.keys(techniqueDistribution).map(technique => techniqueConfidences[technique]),
+                    type: 'line',
+                    fill: false,
+                    borderColor: 'rgba(230, 126, 34, 1)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    // PDF Generation logic
+    document.getElementById('save-pdf').addEventListener('click', function() {
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.className = 'loading-overlay';
+        loadingOverlay.innerHTML = '<div class="spinner"></div><p>Generating PDF...</p>';
+        document.body.appendChild(loadingOverlay);
+
+        const element = document.getElementById('report-content');
+        const opt = {
+            margin: [10, 10],
+            filename: 'threat_analysis_report.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { 
+                scale: 2,
+                useCORS: true,
+                logging: true,
+                letterRendering: true
+            },
+            jsPDF: { 
+                unit: 'mm', 
+                format: 'a4', 
+                orientation: 'portrait'
+            },
+            pagebreak: { 
+                mode: ['avoid-all', 'css', 'legacy'],
+                before: '.page-break-before',
+                after: '.page-break-after'
+            }
+        };
+
+        // Generate PDF
+        html2pdf().set(opt).from(element).save().then(() => {
+            document.body.removeChild(loadingOverlay); // Remove loading overlay after success
+        }).catch(error => {
+            console.error('PDF generation failed:', error);
+            document.body.removeChild(loadingOverlay); // Remove loading overlay on error
+            alert('Failed to generate PDF. Please try again.');
+        });
+    });
+
+    // Initialize charts and other scripts on DOMContentLoaded
+    document.addEventListener("DOMContentLoaded", function() {
+        createTacticChart();
+        createTechniqueChart();
+
+        // Loading overlay CSS
+        const style = document.createElement('style');
+        style.textContent = `
+            .loading-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(255, 255, 255, 0.9);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+            }
+            .spinner {
+                width: 50px;
+                height: 50px;
+                border: 5px solid #f3f3f3;
+                border-top: 5px solid #3498db;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin-bottom: 10px;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    });
+</script>
+{% endblock %}
