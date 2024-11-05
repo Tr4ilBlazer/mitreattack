@@ -24,7 +24,7 @@ This project implements a machine learning-based system for detecting and classi
 - Implements prediction logic
 - Handles text preprocessing and batch processing
 
-### 2. Web Application (`app.py`)
+### 2. Web Application (`main.py`)
 - Implements Flask web server
 - Manages file uploads and processing
 - Renders results and analysis
@@ -54,7 +54,7 @@ This project implements a machine learning-based system for detecting and classi
 
 1. Start the Flask server:
    ```
-   python app.py
+   python main.py
    ```
 2. Open a web browser and navigate to `http://localhost:5000`
 3. Upload a text file, PDF, or DOCX document for analysis
